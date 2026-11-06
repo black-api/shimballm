@@ -1,0 +1,8 @@
+torch>=2.1
+numpy>=1.24
+pyyaml>=6.0
+# Optional: Hugging Face integration (models, datasets, hub upload)
+# pip install -e ".[hf]"
+transformers>=4.40
+datasets>=2.19
+huggingface_hub>=0.23

@@ -1,0 +1,71 @@
+# Real-world template: 135M student on a FineWeb-Edu sample with an HF
+# reference scorer. Requires: pip install "shimballm[hf]"
+#
+#   # 1) put a sample aside (any .jsonl with {"text": ...} lines), e.g.
+#   #    python -c "from datasets import load_dataset; \
+#   #      load_dataset('HuggingFaceFW/fineweb-edu', 'sample-10BT', split='train', \
+#   #      streaming=True).take(200000) ..."  (or use your own dump)
+#   # 2) shimballm train --config examples/smollm_135m_hf.yaml
+#
+# This mirrors the paper's protocol section: 0.5B-class students on an open,
+# reproducible data stack with a reference scorer that has headroom to
+# discriminate (FineWeb-Edu vs its parent corpus).
+
+model:
+  arch: hf
+  hf_name: HuggingFaceTB/SmolLM2-135M
+
+ref:
+  arch: hf
+  hf_name: HuggingFaceTB/SmolLM2-135M-instruct   # swap for a smaller sibling if available
+  params_target: 0.3e9      # accounting for the scoring pass
+  corpus_inflation: 1.4
+  batch_size: 32
+  score_max_docs: 0
+
+data:
+  corpus: data/fineweb-edu-sample.jsonl
+  tokenizer: HuggingFaceTB/SmolLM2-135M
+  val_fraction: 0.01
+  seed: 7
+  cache_dir: cache/fineweb-edu-135m
+
+crop:
+  doc_drop_quantile: 0.30
+  stage_b_doc_quantile: 0.50
+  stage_c_doc_quantile: 0.80
+  rho_start: 0.40
+  rho_end: 0.10
+  gate_enabled: true
+  gate_gamma: 1.0e-5
+  gate_patience: 2
+  min_stage_fraction: 0.25
+
+schedule:
+  total_tokens: 6000000000     # 6B-token budget (scale to your compute)
+  stage_shares: [0.55, 0.30, 0.15]
+  warmup_fraction: 0.05
+  peak_lr: 6.0e-4
+  end_lr_fraction: 0.1
+  context_start: 2048          # paper: 2K
+  context_end: 4096            # paper: 4K
+  batch_size: 64
+  grad_accum: 4
+  weight_decay: 0.1
+  grad_clip: 1.0
+  optimizer: adamw             # try: muon
+  amp_dtype: bf16
+
+engine:
+  out_dir: runs/smollm135m_crop
+  eval_every: 200
+  eval_batches: 8
+  log_every: 20
+  seed: 0
+  device: auto
+  save_stable_ckpt: true
+
+hub:
+  org: ShimbaLLM
+  repo_name: crop-smollm2-135m-fineweb-edu
+  push_after_train: false

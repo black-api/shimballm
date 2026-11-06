@@ -1,0 +1,71 @@
+# Tiny CPU demo: full CROP pipeline in ~1 minute on a laptop CPU.
+# Run:  shimballm demo           (or: shimballm train --config examples/tiny_cpu.yaml)
+model:
+  arch: tiny
+  vocab_size: 96
+  d_model: 64
+  n_layers: 4
+  n_heads: 4
+  n_kv_heads: null          # set 2 for GQA
+  ffn_mult: 4.0
+  tie_embeddings: true
+  max_seq_len: 256
+
+ref:                        # frozen scorer, ~5x smaller than the student
+  arch: tiny
+  d_model: 32
+  n_layers: 2
+  n_heads: 2
+  params_target: 0.05e6     # accounting: real count is used at runtime
+  corpus_inflation: 1.4
+  batch_size: 16
+
+data:
+  corpus: synthetic         # deterministic Zipf-template corpus
+  tokenizer: char
+  synthetic_docs: 2048
+  synthetic_doc_len: 192
+  synthetic_vocab_words: 512
+  val_fraction: 0.02
+  seed: 7
+
+crop:                       # the two new hyper-parameters are doc_drop_quantile & gate_gamma
+  enabled: true
+  doc_drop_quantile: 0.30   # theta_doc: drop bottom 30% of documents (Eq. 3)
+  stage_b_doc_quantile: 0.50
+  stage_c_doc_quantile: 0.80
+  rho_start: 0.40           # easiest-token share masked at Stage-B start
+  rho_end: 0.10             # ... relaxed by the end of Stage B (Eq. 5)
+  gate_enabled: true        # adaptive stage gating (Eq. 6)
+  gate_gamma: 1.0e-5        # val excess-loss slope threshold
+  gate_patience: 2
+  min_stage_fraction: 0.25
+
+schedule:
+  total_tokens: 1200000     # D* for this demo
+  stage_shares: [0.55, 0.30, 0.15]   # A / B / C (paper Sec. 6)
+  warmup_fraction: 0.05
+  peak_lr: 3.0e-3
+  end_lr_fraction: 0.1
+  context_start: 64         # paper: 2K
+  context_end: 128          # paper: 4K
+  batch_size: 32
+  grad_accum: 1
+  weight_decay: 0.1
+  grad_clip: 1.0
+  optimizer: adamw          # or: muon
+  amp_dtype: none           # bf16 | fp16 | none
+
+engine:
+  out_dir: runs/tiny_cpu
+  eval_every: 25
+  eval_batches: 4
+  log_every: 10
+  seed: 0
+  device: auto
+  save_stable_ckpt: true
+
+hub:
+  org: ShimbaLLM
+  repo_name: crop-tiny-demo
+  push_after_train: false
